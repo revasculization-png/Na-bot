@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CVVH Na Time-course Calculator</title>
+
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",Arial;margin:18px}
+h2{margin-bottom:6px}
+.small{font-size:12px;color:#555;line-height:1.35}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px}
+.card{border:1px solid #ddd;border-radius:12px;padding:12px}
+label{display:block;margin-top:6px;font-size:13px}
+input[type=number], select, input[type=range]{width:100%}
+button{padding:10px 14px;border:0;border-radius:10px;background:#000;color:#fff;cursor:pointer}
+.outbox{border:1px solid #eee;border-radius:12px;padding:10px;margin-top:10px;background:#fafafa}
+.warn8{color:#c77700;font-weight:700}
+.warn10{color:#b00020;font-weight:800}
+.mono{font-family:ui-monospace,Menlo,Consolas}
+svg{border:1px solid #eee;border-radius:10px;margin-top:8px}
+.row{display:flex;gap:10px}
+.row > div{flex:1}
+.axis-label{font-size:13px;fill:#000;font-weight:600}
+.tick{font-size:11px;fill:#000}
+</style>
+</head>
+
+<body>
+<h2>CVVH Steady-state Na + Time-course</h2>
+<div class="small">
+CVVH（Na sieving≈1），dialysate 視為 post-dilution 等價，volume balance = 0。<br>
+橫軸：每小時（hrs）；縱軸：每 1 mmol/L（[Na]）。
+</div>
+
+<div class="grid">
+
+<!-- Time-course + Vd -->
+<div class="card">
+<h3>1) Time-course & Vd</h3>
+
+<label>Initial Na S₀ (mmol/L)</label>
+<input id="na0" type="number" value="130">
+
+<label>Vd estimation</label>
+<select id="vdmode">
+  <option value="watson" selected>Watson TBW</option>
+  <option value="manual">Manual input</option>
+</select>
+
+<div id="watsonBox">
+  <div class="row">
+    <div>
+      <label>Sex</label>
+      <select id="sex"><option value="M">Male</option><option value="F">Female</option></select>
+    </div>
+    <div>
+      <label>Age</label>
+      <input id="age" type="number" value="60">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Height (cm)</label>
+      <input id="ht" type="number" value="170">
+    </div>
+    <div>
+      <label>Weight (kg)</label>
+      <input id="wt" type="number" value="70">
+    </div>
+  </div>
+  <label>Estimated Vd (L)</label>
+  <input id="vwatson" readonly>
+</div>
+
+<div id="manualBox" style="display:none">
+  <label>Manual Vd (L)</label>
+  <input id="vmanual" type="number" value="42">
+</div>
+
+<hr>
+<label>Time slider (0–48 hrs)</label>
+<input id="tslider" type="range" min="0" max="48" step="0.1" value="0">
+<div class="small">t = <span id="tlabel">0.0</span> hr ｜ Na(t) = <span id="nalabel">—</span></div>
+</div>
+
+<!-- CVVH settings -->
+<div class="card"><h3>2) Blood flow</h3>
+<label>Qb (mL/min)</label><input id="qb" value="200">
+<label>Hct</label><input id="hct" value="0.30">
+</div>
+
+<div class="card"><h3>3) PBP</h3>
+<label>Qpbp (mL/hr)</label><input id="qpbp" value="150">
+<label>[Na]pbp</label><input id="napbp" value="513">
+</div>
+
+<div class="card"><h3>4) Replacement</h3>
+<label>Qrep (mL/hr)</label><input id="qrep" value="3000">
+<label>Pre-dilution (%)</label><input id="prepct" value="50">
+<label>[Na]rep</label><input id="narep" value="140">
+</div>
+
+<div class="card"><h3>5) Dialysate</h3>
+<label>Qd (mL/hr)</label><input id="qd" value="0">
+<label>[Na]d</label><input id="nad" value="140">
+</div>
+
+<div class="card"><h3>6) IV infusion</h3>
+<label>Qiv (mL/hr)</label><input id="qiv" value="20">
+<label>[Na]iv</label><input id="naiv" value="833">
+</div>
+
+</div>
+
+<button onclick="calc()">Recalculate</button>
+<div id="result" class="outbox mono"></div>
+<div id="safety" class="outbox"></div>
+
+<svg id="plot" width="100%" height="340"></svg>
+
+<script>
+const ln2=Math.log(2), ln20=Math.log(20);
+function mLmin_to_Lhr(x){return x*60/1000}
+function mLhr_to_Lhr(x){return x/1000}
+function watsonTBW(sex,a,h,w){
+  return sex==="M"?2.447-0.09156*a+0.1074*h+0.3362*w:-2.097+0.1069*h+0.2466*w;
+}
+
+let G={};
+
+vdmode.onchange=()=>{
+  watsonBox.style.display = vdmode.value==="watson"?"block":"none";
+  manualBox.style.display = vdmode.value==="manual"?"block":"none";
+  calc();
+};
+
+function calc(){
+  const S0=+na0.value;
+  const Vd=vdmode.value==="watson"?watsonTBW(sex.value,+age.value,+ht.value,+wt.value):+vmanual.value;
+  if(vdmode.value==="watson") vwatson.value=Vd.toFixed(1);
+
+  const Qp=mLmin_to_Lhr(+qb.value)*(1-hct.value);
+  const Qrep=mLhr_to_Lhr(+qrep.value);
+  const Qpre=Qrep*(+prepct.value/100);
+  const Qpbp=mLhr_to_Lhr(+qpbp.value);
+  const Qd=mLhr_to_Lhr(+qd.value);
+  const Qiv=mLhr_to_Lhr(+qiv.value);
+
+  const Qe=Qrep+Qpbp+Qd+Qiv;
+  const A=Qp+Qpre+Qpbp;
+  const Na_in=Qrep*narep.value+Qpbp*napbp.value+Qd*nad.value+Qiv*naiv.value;
+  const Sss=((Na_in*A/Qe)-(Qpre*narep.value+Qpbp*napbp.value))/Qp;
+
+  const k=(Qe*(Qp/(Qp+Qpre+Qpbp)))/Vd;
+  G={S0,Sss,k};
+
+  const S24=Sss+(S0-Sss)*Math.exp(-k*24);
+  result.innerHTML=`Sss=${Sss.toFixed(2)} | Na(24h)=${S24.toFixed(2)}`;
+
+  drawCurve();
+  updateSlider();
+}
+
+function Na_t(t){return G.Sss+(G.S0-G.Sss)*Math.exp(-G.k*t)}
+
+function drawCurve(){
+  const svg=plot; svg.innerHTML="";
+  const W=svg.clientWidth,H=svg.clientHeight,p=60;
+  const tmax=48;
+
+  const ymin=Math.floor(Math.min(G.S0,G.Sss))-2;
+  const ymax=Math.ceil(Math.max(G.S0,G.Sss))+2;
+
+  const X=t=>p+(t/tmax)*(W-2*p);
+  const Y=s=>H-p-(s-ymin)/(ymax-ymin)*(H-2*p);
+
+  // axes
+  svg.innerHTML+=`<line x1="${p}" y1="${p}" x2="${p}" y2="${H-p}" stroke="#000"/>
+                 <line x1="${p}" y1="${H-p}" x2="${W-p}" y2="${H-p}" stroke="#000"/>`;
+
+  // y-axis ticks (every 1 mmol/L)
+  for(let s=ymin;s<=ymax;s++){
+    const y=Y(s);
+    svg.innerHTML+=`<line x1="${p-4}" y1="${y}" x2="${p}" y2="${y}" stroke="#000"/>
+                    <text x="${p-8}" y="${y+4}" text-anchor="end" class="tick">${s}</text>`;
+  }
+
+  // x-axis ticks (every 1 hour)
+  for(let t=0;t<=tmax;t++){
+    const x=X(t);
+    svg.innerHTML+=`<line x1="${x}" y1="${H-p}" x2="${x}" y2="${H-p+4}" stroke="#000"/>`;
+    if(t%2===0)
+      svg.innerHTML+=`<text x="${x}" y="${H-p+18}" text-anchor="middle" class="tick">${t}</text>`;
+  }
+
+  // axis labels
+  svg.innerHTML+=`
+    <text x="20" y="${p-10}" class="axis-label">[Na] (mmol/L)</text>
+    <text x="${W/2}" y="${H-8}" text-anchor="middle" class="axis-label">Time (hrs)</text>`;
+
+  // Sss line
+  svg.innerHTML+=`<line x1="${p}" y1="${Y(G.Sss)}" x2="${W-p}" y2="${Y(G.Sss)}"
+                      stroke="#888" stroke-dasharray="4"/>
+                  <text x="${W-p-140}" y="${Y(G.Sss)-6}" class="tick">Sss=${G.Sss.toFixed(1)}</text>`;
+
+  // curve
+  let d="";
+  for(let i=0;i<=300;i++){
+    const t=tmax*i/300;
+    d+=(i?"L":"M")+X(t)+","+Y(Na_t(t));
+  }
+  svg.innerHTML+=`<path d="${d}" fill="none" stroke="#007aff" stroke-width="2"/>`;
+}
+
+function updateSlider(){
+  const t=+tslider.value;
+  tlabel.textContent=t.toFixed(1);
+  nalabel.textContent=Na_t(t).toFixed(2);
+  drawCurve();
+
+  const svg=plot,p=60,W=svg.clientWidth,H=svg.clientHeight;
+  const tmax=48;
+  const ymin=Math.floor(Math.min(G.S0,G.Sss))-2;
+  const ymax=Math.ceil(Math.max(G.S0,G.Sss))+2;
+  const X=t=>p+(t/tmax)*(W-2*p);
+  const Y=s=>H-p-(s-ymin)/(ymax-ymin)*(H-2*p);
+
+  svg.innerHTML+=`<line x1="${X(t)}" y1="${p}" x2="${X(t)}" y2="${H-p}"
+                       stroke="#aaa" stroke-dasharray="4"/>
+                  <circle cx="${X(t)}" cy="${Y(Na_t(t))}" r="4" fill="#d11"/>`;
+}
+
+tslider.oninput=updateSlider;
+calc();
+</script>
+</body>
+</html>
