@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CVVH Na Time-course Calculator</title>
+
+<style>
+  body{font-family:system-ui,-apple-system,"Segoe UI",Arial;margin:18px}
+  h2{margin-bottom:6px}
+  .small{font-size:12px;color:#555;line-height:1.35}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px}
+  .card{border:1px solid #ddd;border-radius:12px;padding:12px}
+  label{display:block;margin-top:6px;font-size:13px}
+  input[type=number], select, input[type=range]{width:100%}
+  button{padding:10px 14px;border:0;border-radius:10px;background:#000;color:#fff;cursor:pointer}
+  .outbox{border:1px solid #eee;border-radius:12px;padding:10px;margin-top:10px;background:#fafafa}
+  .mono{font-family:ui-monospace,Menlo,Consolas}
+  svg{border:1px solid #eee;border-radius:10px;margin-top:8px}
+  .row{display:flex;gap:10px}
+  .row > div{flex:1}
+  .axis-label{font-size:13px;fill:#000;font-weight:600}
+  .tick{font-size:11px;fill:#000}
+  .warn8{color:#c77700;font-weight:800}
+  .warn10{color:#b00020;font-weight:900}
+  .hint{font-size:12px;color:#666}
+</style>
+</head>
+
+<body>
+<h2>CVVH Steady-state Na + Time-course</h2>
+<div class="small">
+  假設：CVVH（Na sieving≈1），dialysate 視為 post-dilution 等價，volume balance = 0。<br>
+  Time-course：S(t)=Sss+(S0−Sss)·e<sup>−kt</sup>，k=K/Vd，K=Qe·Qp/(Qp+Qpre+Qpbp)。<br>
+  圖：橫軸每小時（hrs），縱軸每 1 mmol/L（[Na] mmol/L）。<br>
+  <b>規則：所有 slider（含時間 slider）拖動都會即時計算 + 圖表同步更新。</b>
+</div>
+
+<div class="grid">
+
+  <!-- 1) Time-course + Vd -->
+  <div class="card">
+    <h3>1) Time-course & Vd</h3>
+
+    <label>Initial Na S₀ (mmol/L)</label>
+    <input id="na0" type="number" value="130" step="1">
+
+    <label>Vd estimation</label>
+    <select id="vdmode">
+      <option value="watson" selected>Watson TBW</option>
+      <option value="manual">Manual input</option>
+    </select>
+
+    <div id="watsonBox">
+      <div class="row">
+        <div>
+          <label>Sex</label>
+          <select id="sex">
+            <option value="M" selected>Male</option>
+            <option value="F">Female</option>
+          </select>
+        </div>
+        <div>
+          <label>Age</label>
+          <input id="age" type="number" value="60" step="1" min="0">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Height (cm)</label>
+          <input id="ht" type="number" value="170" step="1" min="0">
+        </div>
+        <div>
+          <label>Weight (kg)</label>
+          <input id="wt" type="number" value="70" step="0.1" min="0">
+        </div>
+      </div>
+
+      <label>Estimated Vd (Watson TBW, L)</label>
+      <input id="vwatson" type="number" readonly>
+      <div class="hint">
+        Male: 2.447 − 0.09156·Age + 0.1074·Ht + 0.3362·Wt<br>
+        Female: −2.097 + 0.1069·Ht + 0.2466·Wt
+      </div>
+    </div>
+
+    <div id="manualBox" style="display:none">
+      <label>Manual Vd (L)</label>
+      <input id="vmanual" type="number" value="42" step="0.1" min="1">
+    </div>
+
+    <hr>
+    <label>Time slider (0–48 hrs)</label>
+    <input id="tslider" type="range" min="0" max="48" step="0.1" value="0">
+    <div class="small">t = <span id="tlabel">0.0</span> hr ｜ Na(t) = <span id="nalabel">—</span></div>
+  </div>
+
+  <!-- 2) Blood flow -->
+  <div class="card">
+    <h3>2) Blood flow</h3>
+
+    <label>Qb (mL/min)</label>
+    <input id="qb" type="number" value="200" step="1" min="1">
+    <input id="qb_s" type="range" min="50" max="350" step="5" value="200">
+
+    <label>Hct (%)</label>
+    <input id="hct_pct" type="number" value="30" step="1" min="0" max="70">
+    <input id="hct_s" type="range" min="0" max="70" step="1" value="30">
+  </div>
+
+  <!-- 3) PBP -->
+  <div class="card">
+    <h3>3) PBP</h3>
+
+    <label>PBP fluid preset</label>
+    <select id="pbppreset">
+      <option value="513">3% saline — 513 mmol/L</option>
+      <option value="0">D5W — 0 mmol/L</option>
+      <option value="140">Prismasol B0 solution — 140 mmol/L</option>
+      <option value="154">Normal saline — 154 mmol/L</option>
+      <option value="custom" selected>Custom (manual)</option>
+    </select>
+
+    <label>[Na]pbp (mmol/L) — manual override</label>
+    <input id="napbp" type="number" value="513" step="0.1" min="0">
+
+    <label>Qpbp (mL/hr)</label>
+    <input id="qpbp" type="number" value="150" step="10" min="0">
+    <input id="qpbp_s" type="range" min="0" max="500" step="10" value="150">
+  </div>
+
+  <!-- 4) Replacement -->
+  <div class="card">
+    <h3>4) Replacement</h3>
+
+    <label>[Na]rep (mmol/L)</label>
+    <input id="narep" type="number" value="140" step="1" min="0">
+
+    <label>Qrep (mL/hr)</label>
+    <input id="qrep" type="number" value="3000" step="10" min="0">
+    <input id="qrep_s" type="range" min="0" max="6000" step="50" value="3000">
+
+    <label>Pre-dilution (%)</label>
+    <input id="prepct" type="number" value="50" step="1" min="0" max="100">
+    <input id="prepct_s" type="range" min="0" max="100" step="1" value="50">
+  </div>
+
+  <!-- 5) Dialysate -->
+  <div class="card">
+    <h3>5) Dialysate</h3>
+
+    <label>[Na]d (mmol/L)</label>
+    <input id="nad" type="number" value="140" step="1" min="0">
+
+    <label>Qd (mL/hr)</label>
+    <input id="qd" type="number" value="0" step="10" min="0">
+    <input id="qd_s" type="range" min="0" max="4000" step="50" value="0">
+  </div>
+
+  <!-- 6) IV infusion -->
+  <div class="card">
+    <h3>6) IV infusion</h3>
+
+    <label>IV fluid preset</label>
+    <select id="ivpreset">
+      <option value="833.3">Sodium bicarbonate (7%) — 833.3 mmol/L</option>
+      <option value="154">Normal saline — 154 mmol/L</option>
+      <option value="513">3% saline — 513 mmol/L</option>
+      <option value="0">D5W — 0 mmol/L</option>
+      <option value="custom" selected>Custom (manual)</option>
+    </select>
+
+    <label>[Na]iv (mmol/L) — manual override</label>
+    <input id="naiv" type="number" value="833.3" step="0.1" min="0">
+
+    <label>Qiv (mL/hr)</label>
+    <input id="qiv" type="number" value="20" step="1" min="0">
+    <input id="qiv_s" type="range" min="0" max="300" step="1" value="20">
+  </div>
+
+</div>
+
+<div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+  <button onclick="calc(false)">Recalculate</button>
+  <div class="hint">非 slider 的欄位（例如 Na 濃度手動輸入、下拉選單、Vd 參數）建議按此套用。</div>
+</div>
+
+<div id="result" class="outbox mono"></div>
+<div id="safety" class="outbox"></div>
+
+<svg id="plot" width="100%" height="360"></svg>
+
+<script>
+const ln2 = Math.log(2);
+
+function mLmin_to_Lhr(x){ return x*60/1000; }
+function mLhr_to_Lhr(x){ return x/1000; }
+function watsonTBW(sex, age, ht, wt){
+  return sex==="M"
+    ? 2.447 - 0.09156*age + 0.1074*ht + 0.3362*wt
+    : -2.097 + 0.1069*ht + 0.2466*wt;
+}
+
+let G = {S0:130, Sss:140, k:0.1};
+function Na_t(t){ return G.Sss + (G.S0 - G.Sss) * Math.exp(-G.k * t); }
+
+// ---------- preset wiring (fills Na field only; model updates by Recalculate OR slider drag recalcs using current numbers) ----------
+pbppreset.addEventListener("change", ()=>{
+  if(pbppreset.value !== "custom"){
+    napbp.value = Number(pbppreset.value).toFixed(1);
+  }
+});
+napbp.addEventListener("input", ()=>{
+  if(pbppreset.value !== "custom") pbppreset.value = "custom";
+});
+
+ivpreset.addEventListener("change", ()=>{
+  if(ivpreset.value !== "custom"){
+    naiv.value = Number(ivpreset.value).toFixed(1);
+  }
+});
+naiv.addEventListener("input", ()=>{
+  if(ivpreset.value !== "custom") ivpreset.value = "custom";
+});
+
+vdmode.addEventListener("change", ()=>{
+  watsonBox.style.display = vdmode.value==="watson" ? "block" : "none";
+  manualBox.style.display = vdmode.value==="manual" ? "block" : "none";
+});
+
+// ---------- slider sync helpers ----------
+function bindSlider(numberEl, sliderEl, live=true){
+  sliderEl.addEventListener("input", ()=>{
+    numberEl.value = sliderEl.value;
+    if(live) calc(true);
+  });
+  numberEl.addEventListener("input", ()=>{
+    sliderEl.value = numberEl.value;
+  });
+}
+
+// All sliders are LIVE now
+bindSlider(qb, qb_s, true);
+bindSlider(hct_pct, hct_s, true);
+bindSlider(qpbp, qpbp_s, true);
+bindSlider(qrep, qrep_s, true);
+bindSlider(prepct, prepct_s, true);
+bindSlider(qd, qd_s, true);
+bindSlider(qiv, qiv_s, true);
+
+// Time slider is LIVE (recalc + overlay)
+tslider.addEventListener("input", ()=>{
+  // time slider should not change the model parameters,
+  // but needs recalculation because the curve depends on current G (already computed).
+  // We simply refresh overlay using current G (no need to recalc).
+  updateTimeOverlay();
+});
+
+function calc(live=false){
+  const S0 = +na0.value;
+
+  // Vd
+  let Vd;
+  if(vdmode.value==="watson"){
+    Vd = watsonTBW(sex.value, +age.value, +ht.value, +wt.value);
+    vwatson.value = (isFinite(Vd)?Vd:0).toFixed(1);
+  } else {
+    Vd = +vmanual.value;
+  }
+  if(!(isFinite(Vd) && Vd>0)) Vd = 42;
+
+  // flows
+  const Qb = mLmin_to_Lhr(+qb.value);
+  const Hct = (+hct_pct.value)/100;
+  const Qp = Qb*(1-Hct);
+
+  const Qrep = mLhr_to_Lhr(+qrep.value);
+  const f = (+prepct.value)/100;
+  const Qpre = Qrep*f;
+
+  const Qpbp = mLhr_to_Lhr(+qpbp.value);
+  const Qd   = mLhr_to_Lhr(+qd.value);
+  const Qiv  = mLhr_to_Lhr(+qiv.value);
+
+  const Na_rep = +narep.value;
+  const Na_pbp = +napbp.value;
+  const Na_d   = +nad.value;
+  const Na_iv  = +naiv.value;
+
+  const Qe = Qrep + Qpbp + Qd + Qiv;
+  const A  = Qp + Qpre + Qpbp;
+  const Na_in = Qrep*Na_rep + Qpbp*Na_pbp + Qd*Na_d + Qiv*Na_iv;
+
+  const Sss = ((Na_in*A/Qe) - (Qpre*Na_rep + Qpbp*Na_pbp)) / Qp;
+
+  const K = Qe*(Qp/(Qp+Qpre+Qpbp));
+  const k = K/Vd;
+
+  G = {S0, Sss, k};
+
+  const S12 = Na_t(12);
+  const S24 = Na_t(24);
+  const dNa24 = S24 - S0;
+
+  result.innerHTML =
+    `Vd = ${Vd.toFixed(1)} L<br>` +
+    `Sss = <b>${Sss.toFixed(2)}</b> mmol/L<br>` +
+    `t½ = ${(ln2/k).toFixed(1)} hr<br>` +
+    `Na(12h) = <b>${S12.toFixed(2)}</b> mmol/L<br>` +
+    `Na(24h) = <b>${S24.toFixed(2)}</b> mmol/L<br>` +
+    `ΔNa(24h) = ${dNa24.toFixed(2)} mmol/L` +
+    (live ? `<br><span class="hint">（live: slider update）</span>` : "");
+
+  safety.className = "outbox";
+  const absd = Math.abs(dNa24);
+  if(absd>10){
+    safety.classList.add("warn10");
+    safety.textContent = "⚠ |ΔNa(24h)| > 10 mmol/L/day";
+  } else if(absd>8){
+    safety.classList.add("warn8");
+    safety.textContent = "⚠ |ΔNa(24h)| > 8 mmol/L/day";
+  } else {
+    safety.textContent = "✓ Na correction within safe range (24h estimate)";
+  }
+
+  drawCurve();
+  updateTimeOverlay();
+}
+
+function drawCurve(){
+  const svg = plot;
+  svg.innerHTML = "";
+  const W = svg.clientWidth, H = svg.clientHeight, p = 70, tmax=48;
+
+  const ymin = Math.floor(Math.min(G.S0, G.Sss) - 2);
+  const ymax = Math.ceil (Math.max(G.S0, G.Sss) + 2);
+
+  const X = t => p + (t/tmax)*(W-2*p);
+  const Y = s => H-p - (s-ymin)/(ymax-ymin)*(H-2*p);
+
+  svg.innerHTML += `
+    <line x1="${p}" y1="${p}" x2="${p}" y2="${H-p}" stroke="#000"/>
+    <line x1="${p}" y1="${H-p}" x2="${W-p}" y2="${H-p}" stroke="#000"/>
+    <text x="18" y="${p-14}" class="axis-label">[Na] (mmol/L)</text>
+    <text x="${W/2}" y="${H-10}" text-anchor="middle" class="axis-label">Time (hrs)</text>
+  `;
+
+  // y ticks every 1 mmol/L
+  for(let s=ymin; s<=ymax; s++){
+    const y = Y(s);
+    svg.innerHTML += `
+      <line x1="${p-4}" y1="${y}" x2="${p}" y2="${y}" stroke="#000"/>
+      <text x="${p-8}" y="${y+4}" text-anchor="end" class="tick">${s}</text>
+    `;
+  }
+
+  // x ticks every 1 hr (label every 2 hr)
+  for(let t=0; t<=tmax; t++){
+    const x = X(t);
+    svg.innerHTML += `<line x1="${x}" y1="${H-p}" x2="${x}" y2="${H-p+4}" stroke="#000"/>`;
+    if(t%2===0){
+      svg.innerHTML += `<text x="${x}" y="${H-p+18}" text-anchor="middle" class="tick">${t}</text>`;
+    }
+  }
+
+  // Sss line + label
+  svg.innerHTML += `
+    <line x1="${p}" y1="${Y(G.Sss)}" x2="${W-p}" y2="${Y(G.Sss)}"
+          stroke="#888" stroke-dasharray="4"/>
+    <text x="${W-p-175}" y="${Y(G.Sss)-6}" class="tick">Sss = ${G.Sss.toFixed(1)} mmol/L</text>
+  `;
+
+  // curve
+  let d="";
+  const N=320;
+  for(let i=0;i<=N;i++){
+    const t=tmax*i/N;
+    d += (i===0?"M":"L") + X(t) + "," + Y(Na_t(t));
+  }
+  svg.innerHTML += `<path d="${d}" fill="none" stroke="#007aff" stroke-width="2"/>`;
+
+  // 12h / 24h markers
+  const S12=Na_t(12), S24=Na_t(24);
+  function mark(t,s,label){
+    svg.innerHTML += `
+      <line x1="${X(t)}" y1="${p}" x2="${X(t)}" y2="${H-p}" stroke="#bbb" stroke-dasharray="4"/>
+      <circle cx="${X(t)}" cy="${Y(s)}" r="4" fill="#d11"/>
+      <text x="${X(t)+6}" y="${Y(s)-6}" class="tick">${label}: ${s.toFixed(1)}</text>
+    `;
+  }
+  mark(12,S12,"12h");
+  mark(24,S24,"24h");
+}
+
+function updateTimeOverlay(){
+  const t = +tslider.value;
+  tlabel.textContent = t.toFixed(1);
+  const s = Na_t(t);
+  nalabel.textContent = s.toFixed(2);
+
+  // overlay by redrawing base then overlay (robust)
+  drawCurve();
+
+  const svg = plot;
+  const W = svg.clientWidth, H = svg.clientHeight, p = 70, tmax=48;
+  const ymin = Math.floor(Math.min(G.S0, G.Sss) - 2);
+  const ymax = Math.ceil (Math.max(G.S0, G.Sss) + 2);
+  const X = tt => p + (tt/tmax)*(W-2*p);
+  const Y = ss => H-p - (ss-ymin)/(ymax-ymin)*(H-2*p);
+
+  svg.innerHTML += `
+    <line x1="${X(t)}" y1="${p}" x2="${X(t)}" y2="${H-p}" stroke="#777" stroke-dasharray="4"/>
+    <circle cx="${X(t)}" cy="${Y(s)}" r="4" fill="#007aff"/>
+    <rect x="${Math.min(X(t)+8, W-p-145)}" y="${Math.max(Y(s)-28, p+6)}" width="140" height="22" rx="6" ry="6" fill="#000" opacity="0.65"/>
+    <text x="${Math.min(X(t)+14, W-p-139)}" y="${Math.max(Y(s)-12, p+22)}" fill="#fff" style="font-size:11px">
+      t=${t.toFixed(1)}h, Na=${s.toFixed(2)}
+    </text>
+  `;
+}
+
+// initial
+calc(false);
+updateTimeOverlay();
+</script>
+</body>
+</html>
