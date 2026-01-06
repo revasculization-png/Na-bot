@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CVVH Na Time-course Calculator</title>
+<title>CVVHDF Sodium Time-course Calculator (Nass)</title>
 
 <style>
   body{font-family:system-ui,-apple-system,"Segoe UI",Arial;margin:18px}
@@ -24,15 +24,117 @@
   .warn8{color:#c77700;font-weight:800}
   .warn10{color:#b00020;font-weight:900}
   .hint{font-size:12px;color:#666}
+
+  .ok{color:#1a7f37;font-weight:700;}
+  .bad{color:#b00020;font-weight:700;}
+
+  .info{color:#0b5ed7;font-weight:700;}
+
+  /* ---- Compact layout tweaks ---- */
+  body{margin:8px;font-size:13px;}
+  h1,h2{margin:6px 0;font-size:16px;}
+  .card{padding:8px;margin:6px 0;}
+  .grid{gap:6px;}
+  label{font-size:12px;margin-bottom:2px;}
+  input, select{padding:4px;font-size:12px;}
+  .small{font-size:12px;}
+  .outbox{padding:6px;margin-top:6px;}
+  svg{margin:8px auto;}
+
+
+  /* ---- Layout: use empty space under short cards for the plot (desktop) ---- */
+  #plotcard{grid-column:2 / -1; grid-row:2;}
+  #plotcard h2{display:none;}
+  #plotcard svg{width:100%; height:360px;}
+  @media (max-width: 1100px){
+    #card1{grid-column:1 / -1 !important; grid-row:auto !important;}
+    #plotcard{grid-column:1 / -1; grid-row:auto;}
+    #plotcard svg{height:340px;}
+  }
+
+
+  /* ---- Layout: plot + results side-by-side in row 2 ---- */
+  #summarycard{grid-column:1; grid-row:2;}
+  #plotcard{grid-column:2 / -1; grid-row:2;}
+  #plotcard svg{width:100%; height:340px;}
+  #plotcard{max-width:1200px;}
+  @media (max-width: 1100px){
+    #summarycard{grid-column:1 / -1; grid-row:auto;}
+    #plotcard{grid-column:1 / -1; grid-row:auto; max-width:none;}
+    #plotcard svg{height:320px;}
+  }
+
+
+/* ---- Final alignment tweak: plot right, results above ---- */
+#summarycard{
+  grid-column:1 / -1;
+  grid-row:2;
+}
+#plotcard{
+  grid-column:2 / -1;
+  grid-row:3;
+  margin-left:8px;
+}
+@media (max-width:1100px){
+  #summarycard{grid-column:1 / -1; grid-row:auto;}
+  #plotcard{grid-column:1 / -1; grid-row:auto; margin-left:0;}
+}
+
+
+/* ---- Final layout: narrow results + wide plot on same row ---- */
+#summarycard{
+  grid-column:1;
+  grid-row:2;
+  max-width:360px;
+}
+
+#plotcard{
+  grid-column:2 / -1;
+  grid-row:2;
+  margin-left:8px;
+}
+
+#plotcard svg{
+  width:100%;
+  height:320px;
+}
+
+@media (max-width:1100px){
+  #summarycard{grid-column:1 / -1; grid-row:auto; max-width:none;}
+  #plotcard{grid-column:1 / -1; grid-row:auto; margin-left:0;}
+  #plotcard svg{height:300px;}
+}
+
+
+/* ---- Layout: Results (narrow) + Plot (wide) on the same row ---- */
+#summarycard{grid-column:1; grid-row:2; max-width:320px;}
+#summarycard h2{display:none;}
+#summarycard .hint{font-size:12px;}
+#summarycard button{padding:6px 10px;}
+#plotcard{grid-column:2 / -1; grid-row:2; margin-left:8px;}
+#plotcard svg{width:100%; height:320px;}
+@media (max-width:1100px){
+  #summarycard{grid-column:1 / -1; grid-row:auto; max-width:none;}
+  #plotcard{grid-column:1 / -1; grid-row:auto; margin-left:0;}
+  #plotcard svg{height:300px;}
+}
+
+
+/* ---- Delta Na color bands ---- */
+.ok8{color:#198754;font-weight:700;}   /* <8 */
+.warn8{color:#c77700;font-weight:700;} /* 8–10 */
+.bad10{color:#dc3545;font-weight:700;} /* >10 */
+
 </style>
+
 </head>
 
 <body>
-<h2>CVVHDF Steady-state Na + Time-course</h2>
+<h2>CVVHDF Steady-state Na (Nass) + Time-course</h2>
 <div class="small">
-  Assume：CVVH（Na sieving≈1），dialysate regarded as post-dilution equivalent，volume balance = 0。<br>
-  Time-course：S(t)=Sss+(S0−Sss)·e<sup>−kt</sup>，k=K/Vd，K=Qe·Qp/(Qp+Qpre+Qpbp)。<br>
-  </div>
+  Assumptions: CVVHDF (Na sieving ≈ 1). Dialysate is treated as post-dilution equivalent. Net fluid balance = 0.<br>
+  Time-course: Na(t) = Nass + (Na₀ − Nass)·e<sup>−kt</sup>, where k = K/Vd and K = Qe·Qp/(Qp + Qpre + Qpbp).<br>
+</div>
 
 <div class="grid">
 
@@ -40,10 +142,11 @@
   <div class="card">
     <h3>1) Time-course & Vd</h3>
 
-    <label>Initial Na S₀ (mmol/L)</label>
+    <label>Initial serum Na₀ (mmol/L)</label>
     <input id="na0" type="number" value="130" step="1">
-
-    <label>Vd estimation</label>
+    <label>Body weight (kg) <span class="hint">(used for Watson TBW and dose)</span></label>
+    <input id="wt" type="number" value="70" step="0.1" min="1">
+<label>Vd estimation</label>
     <select id="vdmode">
       <option value="watson" selected>Watson TBW</option>
       <option value="manual">Manual input</option>
@@ -69,11 +172,7 @@
           <label>Height (cm)</label>
           <input id="ht" type="number" value="170" step="1" min="0">
         </div>
-        <div>
-          <label>Weight (kg)</label>
-          <input id="wt" type="number" value="70" step="0.1" min="0">
-        </div>
-      </div>
+</div>
 
       <label>Estimated Vd (Watson TBW, L)</label>
       <input id="vwatson" type="number" readonly>
@@ -91,7 +190,7 @@
     <hr>
     <label>Time slider (0–48 hrs)</label>
     <input id="tslider" type="range" min="0" max="48" step="0.1" value="0">
-    <div class="small">t = <span id="tlabel">0.0</span> hr ｜ Na(t) = <span id="nalabel">—</span></div>
+    <div class="small">t = <span id="tlabel">0.0</span> hr ｜ Na(t) = <span id="nalabel">—</span> mmol/L</div>
   </div>
 
   <!-- 2) Blood flow -->
@@ -132,6 +231,13 @@
   <div class="card">
     <h3>4) Replacement</h3>
 
+    <label>Replacement preset</label>
+    <select id="reppreset">
+      <option value="140">Prismasol B0 solution — 140 mmol/L</option>
+      <option value="142.3">Sintong CVVH solution — 142.3 mmol/L</option>
+      <option value="custom" selected>Custom</option>
+    </select>
+
     <label>[Na]rep (mmol/L)</label>
     <input id="narep" type="number" value="140" step="1" min="0">
 
@@ -147,6 +253,13 @@
   <!-- 5) Dialysate -->
   <div class="card">
     <h3>5) Dialysate</h3>
+
+    <label>Dialysate preset</label>
+    <select id="dialpreset">
+      <option value="140">Prismasol B0 solution — 140 mmol/L</option>
+      <option value="142.3">Sintong CVVH solution — 142.3 mmol/L</option>
+      <option value="custom" selected>Custom</option>
+    </select>
 
     <label>[Na]d (mmol/L)</label>
     <input id="nad" type="number" value="140" step="1" min="0">
@@ -177,17 +290,31 @@
     <input id="qiv_s" type="range" min="0" max="300" step="1" value="20">
   </div>
 
-</div>
 
-<div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+  
+  <div class="card" id="summarycard">
+    <h2>Results</h2>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
   <button onclick="calc(false)">Recalculate</button>
-  <div class="hint">非 slider 的欄位（例如 Na 濃度手動輸入、下拉選單、Vd 參數）建議按此套用。</div>
+  <div class="hint">After changing non-slider fields (e.g., Na concentrations, presets, Watson inputs), click Recalculate.</div>
 </div>
 
 <div id="result" class="outbox mono"></div>
 <div id="safety" class="outbox"></div>
+  </div>
 
-<svg id="plot" width="100%" height="360"></svg>
+<div class="card plotcard" id="plotcard">
+    
+    <svg id="plot" width="100%" height="360"></svg>
+  </div>
+</div>
+
+
+
+  
+
+
+
 
 <script>
 const ln2 = Math.log(2);
@@ -200,8 +327,8 @@ function watsonTBW(sex, age, ht, wt){
     : -2.097 + 0.1069*ht + 0.2466*wt;
 }
 
-let G = {S0:130, Sss:140, k:0.1};
-function Na_t(t){ return G.Sss + (G.S0 - G.Sss) * Math.exp(-G.k * t); }
+let G = {S0:130, Nass:140, k:0.1};
+function Na_t(t){ return G.Nass + (G.S0 - G.Nass) * Math.exp(-G.k * t); }
 
 // ---------- preset wiring (fills Na field only; model updates by Recalculate OR slider drag recalcs using current numbers) ----------
 pbppreset.addEventListener("change", ()=>{
@@ -220,6 +347,28 @@ ivpreset.addEventListener("change", ()=>{
 });
 naiv.addEventListener("input", ()=>{
   if(ivpreset.value !== "custom") ivpreset.value = "custom";
+});
+
+
+
+reppreset.addEventListener("change", ()=>{
+  if(reppreset.value !== "custom"){
+    narep.value = Number(reppreset.value).toFixed(1);
+  }
+  calc(); updateTimeOverlay();
+});
+narep.addEventListener("input", ()=>{
+  if(reppreset.value !== "custom") reppreset.value = "custom";
+});
+
+dialpreset.addEventListener("change", ()=>{
+  if(dialpreset.value !== "custom"){
+    nad.value = Number(dialpreset.value).toFixed(1);
+  }
+  calc(); updateTimeOverlay();
+});
+nad.addEventListener("input", ()=>{
+  if(dialpreset.value !== "custom") dialpreset.value = "custom";
 });
 
 vdmode.addEventListener("change", ()=>{
@@ -290,39 +439,71 @@ function calc(live=false){
   const A  = Qp + Qpre + Qpbp;
   const Na_in = Qrep*Na_rep + Qpbp*Na_pbp + Qd*Na_d + Qiv*Na_iv;
 
-  const Sss = ((Na_in*A/Qe) - (Qpre*Na_rep + Qpbp*Na_pbp)) / Qp;
+  const Nass = ((Na_in*A/Qe) - (Qpre*Na_rep + Qpbp*Na_pbp)) / Qp;
 
   const K = Qe*(Qp/(Qp+Qpre+Qpbp));
   const k = K/Vd;
 
-  G = {S0, Sss, k};
+  // --- Filtration fraction (FF) and effective effluent dose (accounts for pre-dilution dilution) ---
+  const Qpost = Qrep - Qpre;                 // post-dilution replacement (L/hr)
+  const Qconv = Qrep + Qpbp;                 // convective ultrafiltration component (assumes net UF = 0; includes PBP as prefilter infusion removed in effluent)
+  const dilutionFactor = Qp / (Qp + Qpre + Qpbp);  const DF_pct = dilutionFactor * 100;
+  // C_pre / C_plasma
+  const FF = (Qconv / (Qp + Qpre + Qpbp)) * 100;   // %
+  const Qeff_Lhr = (Qd + Qconv) * dilutionFactor;  // dilution-adjusted effective effluent (L/hr) for BOTH diffusive + convective components
+  const wtDose = (() => {
+    const v = +document.getElementById("wt").value;
+    return (isFinite(v) && v > 0) ? v : 70;
+  })();
+  const effluentDose_mLkgHr = (Qeff_Lhr * 1000) / wtDose; // mL/kg/hr
+
+  G = {S0, Nass, k};
 
   const S12 = Na_t(12);
   const S24 = Na_t(24);
   const dNa24 = S24 - S0;
 
   result.innerHTML =
-    `Vd = ${Vd.toFixed(1)} L<br>` +
-    `Sss = <b>${Sss.toFixed(2)}</b> mmol/L<br>` +
-    `t½ = ${(ln2/k).toFixed(1)} hr<br>` +
-    `Na(12h) = <b>${S12.toFixed(2)}</b> mmol/L<br>` +
+        `Nass = <b>${Nass.toFixed(2)}</b> mmol/L<br>` +
+            `Na(12h) = <b>${S12.toFixed(2)}</b> mmol/L<br>` +
     `Na(24h) = <b>${S24.toFixed(2)}</b> mmol/L<br>` +
-    `ΔNa(24h) = ${dNa24.toFixed(2)} mmol/L` +
-    (live ? `<br><span class="hint">（live: slider update）</span>` : "");
+    `ΔNa(24h) = <b>${dNa24.toFixed(2)}</b> mmol/L<br>` +
+    `FF = <b>${FF.toFixed(1)}%</b> (convective FF)<br>` +
+    `Effective effluent dose = <b>${effluentDose_mLkgHr.toFixed(1)}</b> mL/kg/hr (dilution-adjusted)<br>` +
+    (live ? `<br><span class="hint">(live: slider update)</span>` : "");
 
   safety.className = "outbox";
+  safety.innerHTML = "";  // multi-line safety messages
+
+  // 24h Na correction warning
   const absd = Math.abs(dNa24);
-  if(absd>10){
+  if(absd > 10){
     safety.classList.add("warn10");
-    safety.textContent = "⚠ |ΔNa(24h)| > 10 mmol/L/day";
-  } else if(absd>8){
+    safety.innerHTML += "<span class=\"bad\">✗ |ΔNa(24h)| &gt; 10 mmol/L/day</span><br>";
+  } else if(absd > 8){
     safety.classList.add("warn8");
-    safety.textContent = "⚠ |ΔNa(24h)| > 8 mmol/L/day";
+    safety.innerHTML += "⚠ |ΔNa(24h)| &gt; 8 mmol/L/day<br>";
   } else {
-    safety.textContent = "✓ Na correction within safe range (24h estimate)";
+    safety.innerHTML += "<span class=\"ok\">✓ |ΔNa(24h)| < 8 mmol/L/day</span><br>";
   }
 
-  drawCurve();
+  // Filtration fraction warning (FF > 25%)
+  if(FF > 25){
+    safety.classList.add("warn8");
+    safety.innerHTML += "<span class=\"bad\">✗ Filtration fraction (FF) &gt; 25%</span><br>";
+  } else {
+    safety.innerHTML += "<span class=\"ok\">✓ Filtration fraction (FF) ≤ 25%</span><br>";
+  }
+
+  // Effective effluent dose (KDIGO target 20–25 mL/kg/hr)
+  if(effluentDose_mLkgHr < 20){
+    safety.innerHTML += `<span class="bad">✗ Effective effluent dose &lt; 20 mL/kg/hr (below KDIGO target 20–25)</span><br>`;
+  } else if(effluentDose_mLkgHr <= 25){
+    safety.innerHTML += `<span class="ok">✓ Effective effluent dose 20–25 mL/kg/hr (within KDIGO target)</span><br>`;
+  } else {
+    safety.innerHTML += `<span class="info">ℹ Effective effluent dose &gt; 25 mL/kg/hr (above KDIGO target 20–25)</span><br>`;
+  }
+drawCurve();
   updateTimeOverlay();
 }
 
@@ -331,8 +512,8 @@ function drawCurve(){
   svg.innerHTML = "";
   const W = svg.clientWidth, H = svg.clientHeight, p = 70, tmax=48;
 
-  const ymin = Math.floor(Math.min(G.S0, G.Sss) - 2);
-  const ymax = Math.ceil (Math.max(G.S0, G.Sss) + 2);
+  const ymin = Math.floor(Math.min(G.S0, G.Nass) - 2);
+  const ymax = Math.ceil (Math.max(G.S0, G.Nass) + 2);
 
   const X = t => p + (t/tmax)*(W-2*p);
   const Y = s => H-p - (s-ymin)/(ymax-ymin)*(H-2*p);
@@ -362,11 +543,11 @@ function drawCurve(){
     }
   }
 
-  // Sss line + label
+  // Nass line + label
   svg.innerHTML += `
-    <line x1="${p}" y1="${Y(G.Sss)}" x2="${W-p}" y2="${Y(G.Sss)}"
+    <line x1="${p}" y1="${Y(G.Nass)}" x2="${W-p}" y2="${Y(G.Nass)}"
           stroke="#888" stroke-dasharray="4"/>
-    <text x="${W-p-175}" y="${Y(G.Sss)-6}" class="tick">Sss = ${G.Sss.toFixed(1)} mmol/L</text>
+    <text x="${W-p-175}" y="${Y(G.Nass)-6}" class="tick">Nass = ${G.Nass.toFixed(1)} mmol/L</text>
   `;
 
   // curve
@@ -402,8 +583,8 @@ function updateTimeOverlay(){
 
   const svg = plot;
   const W = svg.clientWidth, H = svg.clientHeight, p = 70, tmax=48;
-  const ymin = Math.floor(Math.min(G.S0, G.Sss) - 2);
-  const ymax = Math.ceil (Math.max(G.S0, G.Sss) + 2);
+  const ymin = Math.floor(Math.min(G.S0, G.Nass) - 2);
+  const ymax = Math.ceil (Math.max(G.S0, G.Nass) + 2);
   const X = tt => p + (tt/tmax)*(W-2*p);
   const Y = ss => H-p - (ss-ymin)/(ymax-ymin)*(H-2*p);
 
