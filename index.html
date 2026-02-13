@@ -2736,7 +2736,7 @@ const Qe = Qpbp + Qrep + Qd + Qiv;  // mL/hr (user definition)
   const dNa24 = S24 - S0;
 
   result.innerHTML =
-        `Na<sub>ss</sub> = <span class="nass-big">${Nass.toFixed(2)}</span> mmol/L<br>` +
+        `[Na]<sub>SS</sub> = <span class="nass-big">${Nass.toFixed(2)}</span> mmol/L<br>` +
     `ΔNa(24h) = <span id="deltaNaValue" class="delta-big">${dNa24.toFixed(2)}</span> mmol/L<br>` +
     
     `FF = <b>${FF.toFixed(1)}%</b> (convective FF)<br>` +`Effluent rate (Qeff) = <b>${((Qrep + Qd + Qpbp + Qiv)*1000).toFixed(0)}</b> mL/hr<br>` +    
