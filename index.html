@@ -2857,7 +2857,7 @@ function drawCurve(){
   svg.innerHTML += `
     <line x1="${p}" y1="${Y(G.Nass)}" x2="${W-p}" y2="${Y(G.Nass)}"
           stroke="#888" stroke-dasharray="4"/>
-    <text x="${W-p-175}" y="${Y(G.Nass)-6}" class="tick"><tspan>Na</tspan><tspan baseline-shift="sub" font-size="70%">ss</tspan><tspan> = ${G.Nass.toFixed(1)} mmol/L</tspan></text>
+    <text x="${W-p-175}" y="${Y(G.Nass)-6}" class="tick"><tspan>[Na]</tspan><tspan baseline-shift="sub" font-size="70%">ss</tspan><tspan> = ${G.Nass.toFixed(1)} mmol/L</tspan></text>
   `;
 
   // curve
